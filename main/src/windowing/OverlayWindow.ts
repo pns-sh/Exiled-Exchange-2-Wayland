@@ -1,17 +1,21 @@
 import path from "path";
 import { BrowserWindow, dialog, shell, Menu } from "electron";
-import {
-  OverlayController,
-  OVERLAY_WINDOW_OPTS,
-} from "electron-overlay-window";
+import { OVERLAY_WINDOW_OPTS } from "electron-overlay-window";
 import type { ServerEvents } from "../server";
 import type { Logger } from "../RemoteLogger";
 import type { GameWindow } from "./GameWindow";
+import { InputProxy } from "./InputProxy";
 
 export class OverlayWindow {
   public isInteractable = false;
   public wasUsedRecently = true;
   private window?: BrowserWindow;
+  // KDE Wayland only. See InputProxy for the rationale; in short, the main
+  // window is focusable:false (needed for visibility above PoE2's fullscreen
+  // Wayland surface), so we can't receive keyboard input directly. The proxy
+  // is an invisible focusable window that grabs Wayland keyboard focus on
+  // our behalf and forwards keystrokes into the main window via executeJavaScript.
+  private inputProxy?: InputProxy;
   private overlayKey: string = "Shift + Space";
   private isOverlayKeyUsed = false;
 
@@ -33,9 +37,24 @@ export class OverlayWindow {
 
     if (process.argv.includes("--no-overlay")) return;
 
+    // On KDE Wayland, electron-overlay-window's default Linux options leave
+    // the BrowserWindow focusable + with shadow + in taskbar. KWin appears
+    // to treat such windows as normal app windows and skips compositing
+    // them entirely when setIgnoreMouseEvents(true) is set. Match the
+    // settings the standalone wayland-probe used (which DID render visibly
+    // with click-through enabled) -- focusable:false, skipTaskbar:true,
+    // hasShadow:false.
+    const isLinux = process.platform === "linux";
     this.window = new BrowserWindow({
       icon: path.join(__dirname, process.env.STATIC!, "icon.png"),
       ...OVERLAY_WINDOW_OPTS,
+      ...(isLinux
+        ? {
+            focusable: false,
+            skipTaskbar: true,
+            hasShadow: false,
+          }
+        : {}),
       width: 800,
       height: 600,
       webPreferences: {
@@ -52,6 +71,11 @@ export class OverlayWindow {
         { role: "toggleDevTools" },
       ]),
     );
+
+    // Create InputProxy for KDE Wayland keyboard input forwarding
+    if (isLinux && this.poeWindow.isWayland) {
+      this.inputProxy = new InputProxy(this.window, this.assertGameActive);
+    }
 
     this.window.webContents.on("before-input-event", this.handleExtraCommands);
     this.window.webContents.on(
@@ -87,16 +111,24 @@ export class OverlayWindow {
   assertOverlayActive = () => {
     if (!this.isInteractable) {
       this.isInteractable = true;
-      OverlayController.activateOverlay();
+      this.poeWindow.activateOverlay();
       this.poeWindow.isActive = false;
+      // Show InputProxy so we can receive keyboard input on Wayland
+      this.inputProxy?.show();
+      // Pause KWin shortcut grabs so keys reach InputProxy for UI input
+      this.poeWindow.pauseShortcuts();
     }
   };
 
   assertGameActive = () => {
     if (this.isInteractable) {
       this.isInteractable = false;
-      OverlayController.focusTarget();
+      // Hide InputProxy first
+      this.inputProxy?.hide();
+      this.poeWindow.focusTarget();
       this.poeWindow.isActive = true;
+      // Resume KWin shortcut grabs
+      this.poeWindow.resumeShortcuts();
     }
   };
 
@@ -174,6 +206,11 @@ export class OverlayWindow {
   private handlePoeWindowActiveChange = (isActive: boolean) => {
     if (isActive && this.isInteractable) {
       this.isInteractable = false;
+      // PoE2 reclaimed focus by other means (e.g. user clicked game area).
+      // Hide InputProxy if it was showing.
+      this.inputProxy?.hide();
+      // Resume KWin shortcut grabs
+      this.poeWindow.resumeShortcuts();
     }
     this.server.sendEventTo("broadcast", {
       name: "MAIN->OVERLAY::focus-change",

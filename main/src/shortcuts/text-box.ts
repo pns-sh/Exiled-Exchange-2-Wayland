@@ -1,5 +1,5 @@
-import { uIOhook, UiohookKey as Key } from "uiohook-napi";
 import process from "process";
+import { keyTapByName, keyTapWithModsByName } from "./InputSynth";
 import type { HostClipboard } from "./HostClipboard";
 import type { OverlayWindow } from "../windowing/OverlayWindow";
 
@@ -13,43 +13,47 @@ const AUTO_CLEAR = [
   "/", // Command
 ];
 
+// All key synthesis goes through InputSynth -- on Wayland uiohook's XTest
+// path doesn't reach Wayland clients (PoE2 sees nothing). InputSynth
+// routes through ydotool on Linux and falls back to uiohook elsewhere.
 export function typeInChat(
   text: string,
   send: boolean,
   clipboard: HostClipboard,
 ) {
-  clipboard.restoreShortly((clipboard) => {
-    const modifiers = process.platform === "darwin" ? [Key.Meta] : [Key.Ctrl];
+  clipboard.restoreShortly((cb) => {
+    const modKey = process.platform === "darwin" ? "Meta" : "Ctrl";
+    const modifiers = [modKey];
 
     if (text.startsWith(PLACEHOLDER_LAST)) {
       text = text.slice(`${PLACEHOLDER_LAST} `.length);
       clipboard.writeText(text);
-      uIOhook.keyTap(Key.Enter, modifiers);
+      keyTapWithModsByName("Enter", modifiers);
     } else if (text.endsWith(PLACEHOLDER_LAST)) {
       text = text.slice(0, -PLACEHOLDER_LAST.length);
       clipboard.writeText(text);
-      uIOhook.keyTap(Key.Enter, modifiers);
-      uIOhook.keyTap(Key.Home);
+      keyTapWithModsByName("Enter", modifiers);
+      keyTapByName("Home");
       // press twice to focus input when using controller
-      uIOhook.keyTap(Key.Home);
-      uIOhook.keyTap(Key.Delete);
+      keyTapByName("Home");
+      keyTapByName("Delete");
     } else {
       clipboard.writeText(text);
-      uIOhook.keyTap(Key.Enter);
+      keyTapByName("Enter");
       if (!AUTO_CLEAR.includes(text[0])) {
-        uIOhook.keyTap(Key.A, modifiers);
+        keyTapWithModsByName("A", modifiers);
       }
     }
 
-    uIOhook.keyTap(Key.V, modifiers);
+    keyTapWithModsByName("V", modifiers);
 
     if (send) {
-      uIOhook.keyTap(Key.Enter);
+      keyTapByName("Enter");
       // restore the last chat
-      uIOhook.keyTap(Key.Enter);
-      uIOhook.keyTap(Key.ArrowUp);
-      uIOhook.keyTap(Key.ArrowUp);
-      uIOhook.keyTap(Key.Escape);
+      keyTapByName("Enter");
+      keyTapByName("ArrowUp");
+      keyTapByName("ArrowUp");
+      keyTapByName("Escape");
     }
   });
 }
@@ -59,14 +63,14 @@ export function stashSearch(
   clipboard: HostClipboard,
   overlay: OverlayWindow,
 ) {
-  clipboard.restoreShortly((clipboard) => {
+  clipboard.restoreShortly((cb) => {
     overlay.assertGameActive();
     clipboard.writeText(text);
-    uIOhook.keyTap(Key.F, [Key.Ctrl]);
+    keyTapWithModsByName("F", ["Ctrl"]);
 
-    uIOhook.keyTap(Key.V, [
-      process.platform === "darwin" ? Key.Meta : Key.Ctrl,
+    keyTapWithModsByName("V", [
+      process.platform === "darwin" ? "Meta" : "Ctrl",
     ]);
-    uIOhook.keyTap(Key.Enter);
+    keyTapByName("Enter");
   });
 }

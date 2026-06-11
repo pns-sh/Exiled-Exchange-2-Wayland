@@ -5,6 +5,12 @@ import {
   KeyToElectron,
   mergeTwoHotkeys,
 } from "../../../ipc/KeyToCode";
+import {
+  keyTapByName,
+  keyToggleByName,
+  keyTapWithModsByName,
+} from "./InputSynth";
+import { debug } from "../debug";
 import { typeInChat, stashSearch } from "./text-box";
 import { WidgetAreaTracker } from "../windowing/WidgetAreaTracker";
 import { HostClipboard } from "./HostClipboard";
@@ -21,8 +27,25 @@ const UiohookToName = Object.fromEntries(
   Object.entries(UiohookKey).map(([k, v]) => [v, k]),
 );
 
+// On Linux we dispatch from the WaylandTracker's KWin script (via DBus),
+// which calls `registerShortcut(...)` at the compositor level. That is the
+// only way Ctrl+letter combos reach the app under KDE Wayland -- KWin filters
+// them out of the XWayland pipeline otherwise. Electron's globalShortcut
+// (XGrabKey-based) sees nothing. Side-effect: PoE2 does not see the key
+// either, since KWin treats it as a compositor-claimed shortcut.
+const USE_COMPOSITOR_HOTKEYS = process.platform === "linux";
+
+// Convert Qt format shortcuts ("Ctrl+D") to internal format ("Ctrl + D")
+function electronToInternal(shortcut: string): string {
+  return shortcut
+    .split("+")
+    .map((s) => s.trim())
+    .join(" + ");
+}
+
 export class Shortcuts {
   private actions: ShortcutAction[] = [];
+  private actionByShortcut = new Map<string, ShortcutAction>();
   private stashScroll = false;
   private logKeys = false;
   private areaTracker: WidgetAreaTracker;
@@ -81,6 +104,22 @@ export class Shortcuts {
       const pressed = eventToString(e);
       this.logger.write(`debug [Shortcuts] Keydown ${pressed}`);
     });
+
+    if (USE_COMPOSITOR_HOTKEYS) {
+      this.poeWindow.onHotkey((shortcut) => {
+        // KWin emits the shortcut in Qt format ("Ctrl+D"); our action map is
+        // keyed on the app's internal format ("Ctrl + D").
+        const internal = electronToInternal(shortcut);
+        debug(
+          `[Shortcuts] kwin-hotkey shortcut="${shortcut}" internal="${internal}" isActive=${this.poeWindow.isActive} hit=${this.actionByShortcut.has(internal)}`,
+        );
+        if (!this.poeWindow.isActive) return;
+        const entry = this.actionByShortcut.get(internal);
+        if (!entry || entry.action.type === "test-only") return;
+        this.runAction(entry);
+      });
+    }
+
     uIOhook.on("keyup", (e) => {
       if (!this.logKeys) return;
       this.logger.write(
@@ -95,9 +134,9 @@ export class Shortcuts {
 
       if (!isStashArea(e, this.poeWindow)) {
         if (e.rotation > 0) {
-          uIOhook.keyTap(UiohookKey.ArrowRight);
+          keyTapByName("ArrowRight");
         } else if (e.rotation < 0) {
-          uIOhook.keyTap(UiohookKey.ArrowLeft);
+          keyTapByName("ArrowLeft");
         }
       }
     });
@@ -169,103 +208,125 @@ export class Shortcuts {
         !duplicates.has(action.shortcut) ||
         action.action.type === "toggle-overlay",
     );
+
+    // Build the lookup map for compositor hotkey dispatch
+    this.actionByShortcut.clear();
+    for (const entry of this.actions) {
+      this.actionByShortcut.set(entry.shortcut, entry);
+    }
+  }
+
+  private runAction(entry: ShortcutAction) {
+    if (this.logKeys) {
+      this.logger.write(
+        `debug [Shortcuts] Action type: ${entry.action.type}`,
+      );
+    }
+
+    if (entry.keepModKeys) {
+      const nonModKey = entry.shortcut
+        .split(" + ")
+        .filter((key) => !isModKey(key))[0];
+      keyToggleByName(nonModKey, "up");
+    } else {
+      entry.shortcut
+        .split(" + ")
+        .reverse()
+        .forEach((key) => {
+          keyToggleByName(key, "up");
+        });
+    }
+
+    if (entry.action.type === "toggle-overlay") {
+      this.areaTracker.removeListeners();
+      this.overlay.toggleActiveState();
+    } else if (entry.action.type === "paste-in-chat") {
+      typeInChat(entry.action.text, entry.action.send, this.clipboard);
+    } else if (entry.action.type === "trigger-event") {
+      this.server.sendEventTo("broadcast", {
+        name: "MAIN->CLIENT::widget-action",
+        payload: { target: entry.action.target },
+      });
+    } else if (entry.action.type === "stash-search") {
+      stashSearch(entry.action.text, this.clipboard, this.overlay);
+    } else if (entry.action.type === "copy-item") {
+      const { action } = entry;
+
+      // On Wayland, screen.getCursorScreenPoint() returns frozen coords.
+      // Use the WaylandTracker's cursor position instead.
+      const pressPosition =
+        this.poeWindow.getCursorPoint() ?? screen.getCursorScreenPoint();
+
+      this.clipboard
+        .readItemText()
+        .then((clipboard) => {
+          this.areaTracker.removeListeners();
+          this.server.sendEventTo("last-active", {
+            name: "MAIN->CLIENT::item-text",
+            payload: {
+              target: action.target,
+              clipboard,
+              position: pressPosition,
+              focusOverlay: Boolean(action.focusOverlay),
+            },
+          });
+          if (action.focusOverlay && this.overlay.wasUsedRecently) {
+            this.overlay.assertOverlayActive();
+          }
+        })
+        .catch(() => {});
+
+      pressKeysToCopyItemText(
+        entry.keepModKeys
+          ? entry.shortcut.split(" + ").filter((key) => isModKey(key))
+          : undefined,
+        this.gameConfig.showModsKey,
+      );
+    } else if (
+      entry.action.type === "ocr-text" &&
+      entry.action.target === "heist-gems"
+    ) {
+      if (process.platform !== "win32") return;
+
+      const { action } = entry;
+      const pressTime = Date.now();
+      const imageData = this.poeWindow.screenshot();
+      this.ocrWorker
+        .findHeistGems({
+          width: this.poeWindow.bounds.width,
+          height: this.poeWindow.bounds.height,
+          data: imageData,
+        })
+        .then((result) => {
+          this.server.sendEventTo("last-active", {
+            name: "MAIN->CLIENT::ocr-text",
+            payload: {
+              target: action.target,
+              pressTime,
+              ocrTime: result.elapsed,
+              paragraphs: result.recognized.map((p) => p.text),
+            },
+          });
+        })
+        .catch(() => {});
+    }
   }
 
   private register() {
+    if (USE_COMPOSITOR_HOTKEYS) {
+      // On Linux, register shortcuts via KWin compositor
+      const shortcutStrings = this.actions
+        .map((entry) => shortcutToElectron(entry.shortcut))
+        .filter((s) => s.length > 0);
+      this.poeWindow.setShortcuts(shortcutStrings);
+      return;
+    }
+
     for (const entry of this.actions) {
       const isOk = globalShortcut.register(
         shortcutToElectron(entry.shortcut),
         () => {
-          if (this.logKeys) {
-            this.logger.write(
-              `debug [Shortcuts] Action type: ${entry.action.type}`,
-            );
-          }
-
-          if (entry.keepModKeys) {
-            const nonModKey = entry.shortcut
-              .split(" + ")
-              .filter((key) => !isModKey(key))[0];
-            uIOhook.keyToggle(UiohookKey[nonModKey as UiohookKeyT], "up");
-          } else {
-            entry.shortcut
-              .split(" + ")
-              .reverse()
-              .forEach((key) => {
-                uIOhook.keyToggle(UiohookKey[key as UiohookKeyT], "up");
-              });
-          }
-
-          if (entry.action.type === "toggle-overlay") {
-            this.areaTracker.removeListeners();
-            this.overlay.toggleActiveState();
-          } else if (entry.action.type === "paste-in-chat") {
-            typeInChat(entry.action.text, entry.action.send, this.clipboard);
-          } else if (entry.action.type === "trigger-event") {
-            this.server.sendEventTo("broadcast", {
-              name: "MAIN->CLIENT::widget-action",
-              payload: { target: entry.action.target },
-            });
-          } else if (entry.action.type === "stash-search") {
-            stashSearch(entry.action.text, this.clipboard, this.overlay);
-          } else if (entry.action.type === "copy-item") {
-            const { action } = entry;
-
-            const pressPosition = screen.getCursorScreenPoint();
-
-            this.clipboard
-              .readItemText()
-              .then((clipboard) => {
-                this.areaTracker.removeListeners();
-                this.server.sendEventTo("last-active", {
-                  name: "MAIN->CLIENT::item-text",
-                  payload: {
-                    target: action.target,
-                    clipboard,
-                    position: pressPosition,
-                    focusOverlay: Boolean(action.focusOverlay),
-                  },
-                });
-                if (action.focusOverlay && this.overlay.wasUsedRecently) {
-                  this.overlay.assertOverlayActive();
-                }
-              })
-              .catch(() => {});
-
-            pressKeysToCopyItemText(
-              entry.keepModKeys
-                ? entry.shortcut.split(" + ").filter((key) => isModKey(key))
-                : undefined,
-              this.gameConfig.showModsKey,
-            );
-          } else if (
-            entry.action.type === "ocr-text" &&
-            entry.action.target === "heist-gems"
-          ) {
-            if (process.platform !== "win32") return;
-
-            const { action } = entry;
-            const pressTime = Date.now();
-            const imageData = this.poeWindow.screenshot();
-            this.ocrWorker
-              .findHeistGems({
-                width: this.poeWindow.bounds.width,
-                height: this.poeWindow.bounds.height,
-                data: imageData,
-              })
-              .then((result) => {
-                this.server.sendEventTo("last-active", {
-                  name: "MAIN->CLIENT::ocr-text",
-                  payload: {
-                    target: action.target,
-                    pressTime,
-                    ocrTime: result.elapsed,
-                    paragraphs: result.recognized.map((p) => p.text),
-                  },
-                });
-              })
-              .catch(() => {});
-          }
+          this.runAction(entry);
         },
       );
 
@@ -282,6 +343,10 @@ export class Shortcuts {
   }
 
   private unregister() {
+    if (USE_COMPOSITOR_HOTKEYS) {
+      this.poeWindow.setShortcuts([]);
+      return;
+    }
     globalShortcut.unregisterAll();
   }
 }
@@ -303,18 +368,18 @@ function pressKeysToCopyItemText(
   }
 
   for (const key of keys) {
-    uIOhook.keyToggle(UiohookKey[key as UiohookKeyT], "down");
+    keyToggleByName(key, "down");
   }
 
   // finally press `C` to copy text
-  uIOhook.keyTap(UiohookKey.C);
+  keyTapByName("C");
 
   // Timeout to enforce release of keys
   // Game was dropping the release inputs for some reason
   setTimeout(() => {
     keys.reverse();
     for (const key of keys) {
-      uIOhook.keyToggle(UiohookKey[key as UiohookKeyT], "up");
+      keyToggleByName(key, "up");
     }
   }, 10);
 }
