@@ -9,25 +9,21 @@ files:
     filter: ["main.js", "vision.js"]
   - from: "../renderer/dist"
     to: "."
+  - "node_modules/dbus-next/**"
 extraMetadata:
   main: "main.js"
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-win:
-  target:
-    - "nsis"
-    - "portable"
+
 linux:
   target:
     - "AppImage"
-mac:
-  target:
-    - target: "dmg"
-      arch:
-        - "universal"
-  identity: null
-  x64ArchFiles: "*"
+  extraFiles:
+    - from: "build/linux-bin"
+      to: "bin"
+      filter:
+        - "**/*"
+
 appImage:
   executableArgs:
     - "--sandbox"
+    - "--ozone-platform-hint=auto"
+    - "--enable-features=UseOzonePlatform,WaylandWindowDecorations"

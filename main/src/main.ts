@@ -1,6 +1,6 @@
 "use strict";
 
-import { app, systemPreferences } from "electron";
+import { app, dialog, systemPreferences } from "electron";
 import { uIOhook } from "uiohook-napi";
 import os from "node:os";
 import { startServer, eventPipe, server } from "./server";
@@ -16,6 +16,8 @@ import { GameLogWatcher } from "./host-files/GameLogWatcher";
 import { HttpProxy } from "./proxy";
 import { installExtension, VUEJS_DEVTOOLS } from "electron-devtools-installer";
 import { FileWriter } from "./host-files/FileWriter";
+import { isKdeWayland } from "./windowing/WaylandTracker";
+import { YdotooldManager } from "./linux/YdotooldManager";
 
 if (!app.requestSingleInstanceLock()) {
   app.exit();
@@ -26,6 +28,7 @@ if (process.platform !== "darwin") {
 }
 app.enableSandbox();
 let tray: AppTray;
+let ydotooldManager: YdotooldManager | null = null;
 
 (async () => {
   if (process.platform === "darwin") {
@@ -65,8 +68,42 @@ let tray: AppTray;
   app.on("ready", async () => {
     tray = new AppTray(eventPipe);
     const logger = new Logger(eventPipe);
+
+    // Start the bundled ydotoold daemon on KDE Wayland.
+    // All binaries (ydotool, ydotoold, wl-copy, wl-paste) are bundled
+    // in the AppImage. The only thing the user may need is /dev/uinput
+    // write permission (input group membership).
+    if (isKdeWayland()) {
+      ydotooldManager = new YdotooldManager(logger);
+      const status = await ydotooldManager.start();
+
+      if (status === "no-uinput") {
+        const result = dialog.showMessageBoxSync({
+          type: "warning",
+          title: "Input Permission Required",
+          message:
+            "Exiled Exchange 2 needs access to /dev/uinput for keyboard " +
+            "input on Wayland.\n\n" +
+            "Run this command in a terminal, then log out and back in:\n\n" +
+            "  sudo usermod -aG input $USER\n\n" +
+            "The overlay will still launch, but hotkeys and item copying " +
+            "will not work until this is done.",
+          buttons: ["Continue Anyway", "Exit"],
+        });
+        if (result === 1) {
+          app.quit();
+          return;
+        }
+      }
+
+      // Clean up ydotoold on exit
+      app.on("will-quit", () => {
+        ydotooldManager?.stop();
+      });
+    }
+
     const gameConfig = new GameConfig(eventPipe, logger);
-    const poeWindow = new GameWindow();
+    const poeWindow = new GameWindow(logger);
     const appUpdater = new AppUpdater(eventPipe);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _httpProxy = new HttpProxy(server, logger);

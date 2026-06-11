@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node build/script.mjs",
     "build": "tsc --noEmit && node build/script.mjs --prod",
-    "package": "electron-builder build",
+    "package": "bash build/collect-linux-deps.sh && electron-builder build",
     "lint": "eslint src",
     "fix": "eslint src --fix",
     "check-types": "tsc --noemit",
@@ -20,6 +20,7 @@
   },
   "main": "dist/main.js",
   "dependencies": {
+    "dbus-next": "^0.10.2",
     "electron-overlay-window": "4.0.2",
     "uiohook-napi": "1.5.x"
   },

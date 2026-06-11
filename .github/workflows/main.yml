@@ -36,7 +36,7 @@ jobs:
     needs: renderer
     strategy:
       matrix:
-        os: [windows-2025, ubuntu-22.04, macos-14]
+        os: [ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6
@@ -47,6 +47,8 @@ jobs:
       with:
         name: renderer-dist
         path: ./renderer/dist
+    - name: Install native dependencies
+      run: sudo apt-get update && sudo apt-get install -y ydotool wl-clipboard
     - run: npm ci
       working-directory: ./main
     - run: npm run build
@@ -56,11 +58,5 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Hash
-      if: ${{ startsWith(matrix.os, 'windows') }}
-      run: type .\main\dist\latest.yml
-    - name: Hash
       if: ${{ startsWith(matrix.os, 'ubuntu') }}
       run: cat ./main/dist/latest-linux.yml
-    - name: Hash
-      if: ${{ startsWith(matrix.os, 'macos') }}
-      run: cat ./main/dist/latest-mac.yml

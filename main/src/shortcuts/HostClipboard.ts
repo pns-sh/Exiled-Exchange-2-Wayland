@@ -1,8 +1,45 @@
+import { spawnSync } from "child_process";
 import { clipboard, Clipboard } from "electron";
+import { debug } from "../debug";
 import type { Logger } from "../RemoteLogger";
+import { isKdeWayland } from "../windowing/WaylandTracker";
+import { getBinPath, getBundledEnv } from "../linux/BundledBins";
 
 const POLL_DELAY = 48;
-const POLL_LIMIT = 500;
+const POLL_LIMIT = 1500;
+
+// Under native KDE Wayland the overlay process is XWayland; PoE2 is native
+// Wayland. Electron's clipboard.readText() reads the X11 CLIPBOARD, but
+// XWayland only lazily mirrors the Wayland selection into it (usually on a
+// focus change), so polling sees nothing during the action. Shell out to
+// wl-paste to read the Wayland selection directly.
+const USE_WL_PASTE = isKdeWayland();
+
+function readClipboardText(): string {
+  if (USE_WL_PASTE) {
+    const result = spawnSync(getBinPath("wl-paste"), ["--no-newline"], {
+      encoding: "utf-8",
+      timeout: 100,
+      env: getBundledEnv(),
+    });
+    if (result.status === 0 && typeof result.stdout === "string") {
+      return result.stdout;
+    }
+    return "";
+  }
+  return clipboard.readText();
+}
+
+function writeClipboardText(text: string): void {
+  if (USE_WL_PASTE) {
+    spawnSync(getBinPath("wl-copy"), [text], {
+      timeout: 100,
+      env: getBundledEnv(),
+    });
+    return;
+  }
+  clipboard.writeText(text);
+}
 
 // PoE must read clipboard within this timeframe,
 // after that we restore clipboard.
@@ -33,19 +70,19 @@ export class HostClipboard {
       return await this.pollPromise;
     }
 
-    let textBefore = clipboard.readText();
+    let textBefore = readClipboardText();
     if (isPoeItem(textBefore)) {
       textBefore = "";
-      clipboard.writeText("");
+      writeClipboardText("");
     }
 
     this.pollPromise = new Promise((resolve, reject) => {
       const poll = () => {
-        const textAfter = clipboard.readText();
+        const textAfter = readClipboardText();
 
         if (isPoeItem(textAfter)) {
           if (this.shouldRestore) {
-            clipboard.writeText(textBefore);
+            writeClipboardText(textBefore);
           }
           this.pollPromise = undefined;
           resolve(textAfter);
@@ -55,7 +92,7 @@ export class HostClipboard {
             setTimeout(poll, POLL_DELAY);
           } else {
             if (this.shouldRestore) {
-              clipboard.writeText(textBefore);
+              writeClipboardText(textBefore);
             }
             this.pollPromise = undefined;
 
@@ -82,14 +119,24 @@ export class HostClipboard {
     }
 
     this.isRestored = false;
-    const saved = clipboard.readText();
+    const saved = readClipboardText();
     cb(clipboard);
     setTimeout(() => {
       if (this.shouldRestore) {
-        clipboard.writeText(saved);
+        writeClipboardText(saved);
       }
       this.isRestored = true;
     }, RESTORE_AFTER);
+  }
+
+  // Expose write for use by text-box and other callers
+  writeText(text: string) {
+    writeClipboardText(text);
+  }
+
+  // Expose read for use by callers that need raw clipboard access
+  readText(): string {
+    return readClipboardText();
   }
 }
 
@@ -104,7 +151,7 @@ const LANGUAGE_DETECTOR = [
   },
   {
     lang: "ru",
-    firstLine: "Класс предмета: ",
+    firstLine: "\u041a\u043b\u0430\u0441\u0441 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430: ",
   },
   {
     lang: "fr",
@@ -124,22 +171,22 @@ const LANGUAGE_DETECTOR = [
   },
   {
     lang: "th",
-    firstLine: "ชนิดไอเทม: ",
+    firstLine: "\u0e0a\u0e19\u0e34\u0e14\u0e44\u0e2d\u0e40\u0e17\u0e21: ",
   },
   {
     lang: "ko",
-    firstLine: "아이템 종류: ",
+    firstLine: "\uc544\uc774\ud15c \uc885\ub958: ",
   },
   {
     lang: "cmn-Hant",
-    firstLine: "物品種類: ",
+    firstLine: "\u7269\u54c1\u7a2e\u985e: ",
   },
   {
     lang: "cmn-Hans",
-    firstLine: "物品类别: ",
+    firstLine: "\u7269\u54c1\u7c7b\u522b: ",
   },
   {
     lang: "ja",
-    firstLine: "アイテムクラス: ",
+    firstLine: "\u30a2\u30a4\u30c6\u30e0\u30af\u30e9\u30b9: ",
   },
 ];
