@@ -381,6 +381,14 @@ export function calculatedStatToFilter(
       filter.tag = FilterTag.Eldritch;
     } else if (item.isSynthesised) {
       filter.tag = FilterTag.Synthesised;
+    } else if (
+      item.info.unique?.base.startsWith("Runemastered") &&
+      item.info.unique?.fixedStats
+    ) {
+      const fixedStats = item.info.unique.fixedStats;
+      if (!fixedStats.includes(filter.statRef)) {
+        filter.tag = FilterTag.Variant;
+      }
     }
   } else if (type === ModifierType.Explicit) {
     if (
