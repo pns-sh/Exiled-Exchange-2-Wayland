@@ -81,14 +81,14 @@ export function parseModInfoLine(
       match.groups!.type = match
         .groups!.type.slice(_$.DESECRATED_MODIFIER.length)
         .trim();
-      if (type === undefined) {
+      if (type !== ModifierType.Fractured) {
         type = ModifierType.Desecrated;
       }
     } else if (match.groups!.type.startsWith(_$.CRAFTED_MODIFIER)) {
       match.groups!.type = match
         .groups!.type.slice(_$.CRAFTED_MODIFIER.length)
         .trim();
-      if (type === undefined) {
+      if (type !== ModifierType.Fractured) {
         type = ModifierType.Crafted;
       }
     }
