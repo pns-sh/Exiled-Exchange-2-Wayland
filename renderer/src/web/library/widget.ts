@@ -54,7 +54,8 @@ function modFilter(mod: ParsedModifier, keep: ColumnOpts["keep"]) {
       mod.info.generation === "mutated" ||
       // Should be redundant with prefix/suffix
       mod.info.type === ModifierType.Desecrated ||
-      mod.info.type === ModifierType.Fractured)
+      mod.info.type === ModifierType.Fractured ||
+      mod.info.type === ModifierType.Crafted)
   ) {
     return true;
   }

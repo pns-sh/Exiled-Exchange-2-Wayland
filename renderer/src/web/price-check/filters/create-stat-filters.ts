@@ -53,6 +53,7 @@ export function createExactStatFilters(
     ModifierType.Pseudo,
     ModifierType.Fractured,
     ModifierType.Desecrated,
+    ModifierType.Crafted,
     ModifierType.Enchant,
     ModifierType.Necropolis,
     ModifierType.Sanctum,
@@ -677,7 +678,8 @@ export function finalFilterTweaks(ctx: FiltersCreationContext) {
   for (const filter of ctx.filters) {
     if (
       filter.tag === FilterTag.Fractured ||
-      filter.tag === FilterTag.Desecrated
+      filter.tag === FilterTag.Desecrated ||
+      filter.tag === FilterTag.Crafted
     ) {
       const mod = ctx.item.statsByType.find(
         (mod) => mod.stat.ref === filter.statRef,
