@@ -224,7 +224,8 @@ export function initUiModFilters(
     statsByType: item.statsByType.map((calc) => {
       if (
         (calc.type === ModifierType.Fractured ||
-          calc.type === ModifierType.Desecrated) &&
+          calc.type === ModifierType.Desecrated ||
+          calc.type === ModifierType.Crafted) &&
         calc.stat.trade.ids[ModifierType.Explicit]
       ) {
         return { ...calc, type: ModifierType.Explicit };
@@ -249,15 +250,27 @@ export function initUiModFilters(
     ctx.statsByType = ctx.statsByType.filter(
       (mod) =>
         mod.type !== ModifierType.Fractured &&
-        mod.type !== ModifierType.Desecrated,
+        mod.type !== ModifierType.Desecrated &&
+        mod.type !== ModifierType.Crafted,
     );
-    ctx.statsByType.push(
-      ...item.statsByType.filter(
-        (mod) =>
-          mod.type === ModifierType.Fractured ||
-          mod.type === ModifierType.Desecrated,
-      ),
+    // since sources are merged, need to filter out the explicit ones here and
+    const statsWithAllSources = item.statsByType.filter(
+      (mod) =>
+        mod.type === ModifierType.Fractured ||
+        mod.type === ModifierType.Desecrated ||
+        mod.type === ModifierType.Crafted,
     );
+    const statsFilteredSources = statsWithAllSources.map((mod) => {
+      const filteredSources = mod.sources.filter((source) => {
+        return source.modifier.info.type === mod.type;
+      });
+      return {
+        ...mod,
+        sources: filteredSources,
+      };
+    });
+    // since filtered now, below calcStatToFilter should only include the correct rolls for special ones
+    ctx.statsByType.push(...statsFilteredSources);
   }
 
   if (item.isVeiled) {

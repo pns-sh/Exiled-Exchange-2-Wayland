@@ -33,7 +33,7 @@ export function sumStatsByModType(
         out.some(
           (merged) =>
             merged.stat.ref === statA.stat.ref &&
-            merged.type === modA.info.type &&
+            typesCanBeGrouped(merged.type, modA.info.type) &&
             // Multiple allocations should not be merged
             ((statA.stat.ref !== "Allocates #" &&
               statA.stat.ref !== "Legacy of #") ||
@@ -45,10 +45,10 @@ export function sumStatsByModType(
       ) {
         continue;
       }
-
+      let hasFractured = false;
       const sources = mods.reduce(
         (filtered, modB) => {
-          if (modB.info.type === modA.info.type) {
+          if (typesCanBeGrouped(modB.info.type, modA.info.type)) {
             const targetStat = modB.stats.find(
               (statB) =>
                 statB.stat.ref === statA.stat.ref &&
@@ -57,6 +57,9 @@ export function sumStatsByModType(
                   statB.translation.string === statA.translation.string),
             );
             if (targetStat) {
+              if (modB.info.type === ModifierType.Fractured) {
+                hasFractured = true;
+              }
               const roll = (applyIncr(modB.info, targetStat) ?? targetStat)
                 .roll;
               filtered.push({
@@ -76,11 +79,20 @@ export function sumStatsByModType(
         [] as StatCalculated["sources"],
       );
 
-      out.push({ stat: statA.stat, type: modA.info.type, sources });
+      out.push({
+        stat: statA.stat,
+        type: hasFractured ? ModifierType.Fractured : modA.info.type,
+        sources,
+      });
     }
   }
 
   return out;
+}
+
+function typesCanBeGrouped(a: ModifierType, b: ModifierType) {
+  if (a === b) return true;
+  return EXPLICIT_MOD_TYPES.has(a) && EXPLICIT_MOD_TYPES.has(b);
 }
 
 export function statSourcesTotal(
