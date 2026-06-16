@@ -95,6 +95,7 @@ export default {
   WAYSTONE_RARE_MONSTERS: 'レアモンスター: ',
   WAYSTONE_DROP_CHANCE: 'ウェイストーンドロップ確率: ',
   WAYSTONE_RARITY: 'アイテムレアリティ: ',
+  WAYSTONE_EFFECTIVENESS: 'モンスターエフェクティブ: ',
   DOUBLE_CORRUPTED: 'ダブルコラプト状態',
   UNIQUE_MODIFIER: 'ユニークモッド',
   VAAL_UNIQUE_MODIFIER: 'ヴァールユニークモッド',

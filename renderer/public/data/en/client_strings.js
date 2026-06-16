@@ -95,6 +95,7 @@ export default {
   WAYSTONE_RARE_MONSTERS: 'Rare Monsters: ',
   WAYSTONE_DROP_CHANCE: 'Waystone Drop Chance: ',
   WAYSTONE_RARITY: 'Item Rarity: ',
+  WAYSTONE_EFFECTIVENESS: 'Monster Effectiveness: ',
   DOUBLE_CORRUPTED: 'Twice Corrupted',
   UNIQUE_MODIFIER: 'Unique Modifier',
   VAAL_UNIQUE_MODIFIER: 'Vaal Unique Modifier',

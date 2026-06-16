@@ -95,6 +95,7 @@ export default {
   WAYSTONE_RARE_MONSTERS: '稀有怪物: ',
   WAYSTONE_DROP_CHANCE: '換界石掉落機率: ',
   WAYSTONE_RARITY: '物品稀有度: ',
+  WAYSTONE_EFFECTIVENESS: '怪物效能: ',
   DOUBLE_CORRUPTED: '雙重 Corrupted',
   UNIQUE_MODIFIER: '傳奇詞綴',
   VAAL_UNIQUE_MODIFIER: '瓦爾傳奇終結特效',

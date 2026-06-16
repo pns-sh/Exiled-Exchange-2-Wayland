@@ -95,6 +95,7 @@ export default {
   WAYSTONE_RARE_MONSTERS: 'Monstruos raros: ',
   WAYSTONE_DROP_CHANCE: 'Probabilidad de que caigan piedras guía: ',
   WAYSTONE_RARITY: 'Rareza de objetos: ',
+  WAYSTONE_EFFECTIVENESS: 'Efectividad de los monstruos: ',
   DOUBLE_CORRUPTED: 'Doblemente corrupto',
   UNIQUE_MODIFIER: 'Mod. único',
   VAAL_UNIQUE_MODIFIER: 'Modificador único vaal',

@@ -95,6 +95,7 @@ export default {
   WAYSTONE_RARE_MONSTERS: 'Monstros Raros: ',
   WAYSTONE_DROP_CHANCE: 'Chance de obtenção de Pedra-guia: ',
   WAYSTONE_RARITY: 'Raridade de Itens: ',
+  WAYSTONE_EFFECTIVENESS: 'Efetividade do Monstro: ',
   DOUBLE_CORRUPTED: 'Corrompido Duas Vezes',
   UNIQUE_MODIFIER: 'Modificador Único',
   VAAL_UNIQUE_MODIFIER: 'Modificador Único Vaal',

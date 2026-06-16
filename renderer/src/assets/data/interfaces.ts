@@ -228,6 +228,7 @@ export interface TranslationDict {
   WAYSTONE_RARE_MONSTERS: string;
   WAYSTONE_DROP_CHANCE: string;
   WAYSTONE_RARITY: string;
+  WAYSTONE_EFFECTIVENESS: string;
   // WAYSTONE_GOLD: string;
   TIMELESS_RADIUS: string;
   TIMELESS_SMALL_PASSIVES: string;
