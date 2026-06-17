@@ -153,6 +153,7 @@ export interface StatFilter {
 }
 
 export const _INTERNAL_TRADE_IDS = [
+  // #region DO NOT ADD OR REMOVE
   "item.base_percentile",
   "item.armour",
   "item.evasion_rating",
@@ -165,6 +166,7 @@ export const _INTERNAL_TRADE_IDS = [
   "item.aps",
   "item.has_empty_modifier",
   "item.spirit",
+  // #endregion DO NOT ADD OR REMOVE
   // KEEP AS 12 number, maybe fix this to be better later
   "item.has_elemental_affix",
   "item.has_elemental_fire_affix",
@@ -181,6 +183,7 @@ export const _INTERNAL_TRADE_IDS = [
   "item.map_rare_monsters",
   "item.map_gold",
   "item.runic_ward",
+  "item.duplicates",
 ] as const;
 
 export type InternalTradeId = (typeof INTERNAL_TRADE_IDS)[number];

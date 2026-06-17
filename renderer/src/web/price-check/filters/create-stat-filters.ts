@@ -350,7 +350,7 @@ export function calculatedStatToFilter(
 
   const roll = statSourcesTotal(
     calc.sources,
-    calc.stat.trade.count ? "count" : "sum",
+    item.info.refName === "Mirrored Tablet" ? "max" : "sum",
   );
   const translation = translateStatWithRoll(calc, roll);
 

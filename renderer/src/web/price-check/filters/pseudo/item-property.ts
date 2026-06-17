@@ -663,7 +663,7 @@ function isPdpsImportant(item: ParsedItem) {
   }
 }
 
-function propToFilter(
+export function propToFilter(
   opts: {
     ref: string;
     tradeId: InternalTradeId;

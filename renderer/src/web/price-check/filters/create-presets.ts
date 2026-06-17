@@ -8,6 +8,7 @@ import { ItemCategory, ItemRarity, ParsedItem } from "@/parser";
 import type { FilterPreset } from "./interfaces";
 import { PriceCheckWidget } from "@/web/overlay/widgets";
 import { hasCraftingValue, likelyFinishedItem } from "./common";
+import { createUniquePresets, PRESET_UNIQUES } from "./create-unique-filters";
 
 const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V"];
 
@@ -68,6 +69,10 @@ export function createPresets(
         },
       ],
     };
+  }
+
+  if (PRESET_UNIQUES.has(item.info.refName)) {
+    return createUniquePresets(item, opts);
   }
 
   // TODO: pseudo change here
