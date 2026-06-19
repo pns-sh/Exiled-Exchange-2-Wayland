@@ -399,9 +399,9 @@ interface TradeDataRichLine {
   icon?: string;
 }
 interface FetchModInfo {
-  name: string;
-  tier: string;
-  level: number;
+  name?: string;
+  tier?: string;
+  level?: number;
   magnitudes: Array<{ min: string; max: string }>;
 }
 
