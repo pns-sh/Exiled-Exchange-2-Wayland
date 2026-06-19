@@ -408,7 +408,7 @@ interface FetchModInfo {
 interface FetchResultMod {
   description: string;
   hash: string;
-  mods: FetchModInfo[];
+  mods?: FetchModInfo[];
 }
 
 interface FetchResult {
@@ -1680,8 +1680,8 @@ function getTier(
     .join(" + ");
 }
 
-function getTierV2(mods: FetchModInfo[]): string | undefined {
-  if (!mods.length) return;
+function getTierV2(mods: FetchModInfo[] | undefined): string | undefined {
+  if (!mods?.length) return;
 
   return mods.map((mod) => mod.tier).join(" + ");
 }
