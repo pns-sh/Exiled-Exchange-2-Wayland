@@ -4,7 +4,7 @@ import { Host } from "@/web/background/IPC";
 import { useLeagues } from "./Leagues";
 import { AppConfig } from "../Config";
 import { PriceCheckWidget } from "../overlay/widgets";
-import { ITEM_BY_REF } from "@/assets/data";
+import { DropEntry, ITEM_BY_REF } from "@/assets/data";
 
 export type NinjaSchema = NinjaSchemaV1;
 type NinjaSchemaV1 = {
@@ -112,6 +112,9 @@ export const DivCurrency: CoreCurrency = {
 export const usePoeninja = createGlobalState(() => {
   const leagues = useLeagues();
 
+  // TODO: move out of here
+  const ITEM_DROP = shallowRef<DropEntry[]>([]);
+
   const availableCoreCurrencies = shallowRef<CoreCurrency[]>([]);
   const selectedCoreCurrencyId = computed<"exalted" | "chaos">({
     get() {
@@ -168,6 +171,12 @@ export const usePoeninja = createGlobalState(() => {
     try {
       isLoading.value = true;
       downloadController = new AbortController();
+
+      ITEM_DROP.value = JSON.parse(
+        await Host.proxy("api.exiledexchange2.dev/proxy/data/item-drop.json", {
+          signal: downloadController.signal,
+        }).then((r) => r.text()),
+      );
 
       availableCoreCurrencies.value = getAvailableCoreCurrencies().map(
         (currency) => ({
@@ -379,6 +388,7 @@ export const usePoeninja = createGlobalState(() => {
     cachedCurrencyByQuery,
     initialLoading: () => isLoading.value && !PRICES_DB.length,
     availableCoreCurrencies: readonly(availableCoreCurrencies),
+    ITEM_DROP,
   };
 });
 
