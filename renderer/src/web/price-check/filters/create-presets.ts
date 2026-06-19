@@ -32,7 +32,8 @@ export function createPresets(
     autoFillEmptyAugmentSockets: PriceCheckWidget["autoFillEmptyRuneSockets"];
   },
 ): { presets: FilterPreset[]; active: string } {
-  if (item.info.refName === "Expedition Logbook") {
+  // logbooks aren't real anymore
+  if (item.info.refName === "logbook here") {
     return {
       active: ROMAN_NUMERALS[0],
       presets: item.logbookAreaMods!.map<FilterPreset>((area, idx) => ({
