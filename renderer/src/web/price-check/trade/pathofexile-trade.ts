@@ -398,6 +398,18 @@ interface TradeDataRichLine {
   type?: TradePropType;
   icon?: string;
 }
+interface FetchModInfo {
+  name: string;
+  tier: string;
+  level: number;
+  magnitudes: Array<{ min: string; max: string }>;
+}
+
+interface FetchResultMod {
+  description: string;
+  hash: string;
+  mods: FetchModInfo[];
+}
 
 interface FetchResult {
   id: string;
@@ -436,18 +448,18 @@ interface FetchResult {
     gemSockets?: string[];
     properties?: TradeDataRichLine[];
     requirements?: TradeDataRichLine[];
-    grantedSkills?: TradeDataRichLine[];
-    implicitMods?: string[];
-    explicitMods?: string[];
-    craftedMods?: string[];
-    mutatedMods?: string[];
-    enchantMods?: string[];
-    runeMods?: string[];
     extended?: FetchResultExtended;
-    veiledMods?: string[];
-    pseudoMods?: string[];
-    desecratedMods?: string[];
-    fracturedMods?: string[];
+    grantedSkills?: TradeDataRichLine[];
+    implicitMods?: FetchResultMod[] | string[];
+    explicitMods?: FetchResultMod[] | string[];
+    craftedMods?: FetchResultMod[] | string[];
+    mutatedMods?: FetchResultMod[] | string[];
+    enchantMods?: FetchResultMod[] | string[];
+    runeMods?: FetchResultMod[] | string[];
+    veiledMods?: FetchResultMod[] | string[];
+    pseudoMods?: FetchResultMod[] | string[];
+    desecratedMods?: FetchResultMod[] | string[];
+    fracturedMods?: FetchResultMod[] | string[];
     socketedItems?: FetchResult["item"][];
   };
   listing: {
@@ -479,6 +491,7 @@ export interface FetchResultExtended {
   ev_aug?: boolean;
   es_aug?: boolean;
   ward_aug?: boolean;
+  // only has implicit?
   mods?: Record<string, TradeModMetadata[]>;
   hashes?: Record<string, TradeModHashes[]>;
 }
@@ -1534,7 +1547,7 @@ function parseFetchResult(result: FetchResult): PricingResult["displayItem"] {
     ...parseMods(result),
     veiledMods: result.item.veiledMods?.map((vm) => {
       return {
-        text: vm.startsWith("Prefix")
+        text: (vm as string).startsWith("Prefix")
           ? "Unrevealed Prefix"
           : "Unrevealed Suffix",
         color: TradeNumberColors.Desecrated,
@@ -1625,16 +1638,26 @@ function parseMods(result: FetchResult): {
 }
 
 function parseModBlock(
-  translated: string[] | undefined,
+  translated: string[] | FetchResultMod[] | undefined,
   color: TradeNumberColors = TradeNumberColors.Augmented,
   mods?: TradeModMetadata[],
   hashes?: TradeModHashes[],
 ): DisplayItemLine[] | undefined {
   // separate function, allow doing complex parsing later if needed
   if (!translated) return undefined;
-  return translated.map((s, index) => {
-    const tier = getTier(index, mods, hashes);
-    return { text: parseAffixStrings(s), color, tier };
+  if (!translated.length) return [];
+  if (typeof translated[0] === "string") {
+    return (translated as string[]).map((s, index) => {
+      const tier = getTier(index, mods, hashes);
+      return { text: parseAffixStrings(s), color, tier };
+    });
+  }
+  return (translated as FetchResultMod[]).map((s) => {
+    return {
+      text: parseAffixStrings(s.description),
+      color,
+      tier: getTierV2(s.mods),
+    };
   });
 }
 
@@ -1655,6 +1678,12 @@ function getTier(
     .map((modIndex) => mods[modIndex]?.tier)
     .filter((tier) => tier != null)
     .join(" + ");
+}
+
+function getTierV2(mods: FetchModInfo[]): string | undefined {
+  if (!mods.length) return;
+
+  return mods.map((mod) => mod.tier).join(" + ");
 }
 
 function buildNameBlock(
