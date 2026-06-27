@@ -275,10 +275,24 @@ export class WaylandTracker extends EventEmitter {
         "org.kde.KWin",
         "/Scripting",
       );
-      const scripting = kwinObj.getInterface("org.kde.kwin.Scripting");
+      void kwinObj;
 
-      // loadScript returns a script ID (int32)
-      this._scriptId = await scripting.loadScript(this.scriptPath, "exiled-exchange-2-tracker");
+      // KWin's loadScript is overloaded (loadScript(s) and loadScript(s,s)).
+      // dbus-next can't disambiguate overloads and binds the 1-arg form, so
+      // calling it with (path, pluginName) fails with "Expected 1 body
+      // elements for signature 's' (got 2)". Issue the call directly with an
+      // explicit 'ss' signature to pass both arguments.
+      const reply = await this.bus.call(
+        new dbus.Message({
+          destination: "org.kde.KWin",
+          path: "/Scripting",
+          interface: "org.kde.kwin.Scripting",
+          member: "loadScript",
+          signature: "ss",
+          body: [this.scriptPath, "exiled-exchange-2-tracker"],
+        }),
+      );
+      this._scriptId = reply?.body?.[0];
       debug("[WaylandTracker] loaded KWin script, id =", this._scriptId);
 
       if (this._scriptId != null && this._scriptId >= 0) {
@@ -303,7 +317,12 @@ export class WaylandTracker extends EventEmitter {
   }
 
   private async _unloadKwinScript(): Promise<void> {
-    if (this._scriptId == null || !this.bus) return;
+    // Note: do NOT guard on this._scriptId here. A fresh process has
+    // _scriptId == null but a previous (crashed/killed) session may have
+    // left its script loaded in KWin under the same plugin name, which makes
+    // the next loadScript return -1. Always attempt unload-by-name so we
+    // start from a clean slate.
+    if (!this.bus) return;
 
     try {
       const kwinObj = await this.bus.getProxyObject(
