@@ -89,6 +89,30 @@ export class OverlayWindow {
       shell.openExternal(details.url);
       return { action: "deny" };
     });
+
+    // Surface renderer-side warnings/errors into the main log so they are
+    // diagnosable without attaching devtools. The console-message signature
+    // differs across Electron versions: old = (event, level, message, line,
+    // sourceId); new (Electron 36+) = (details) with {level, message,
+    // lineNumber, sourceId}. Handle both.
+    this.window.webContents.on("console-message", (...args: any[]) => {
+      let level: any, message: string, line: any, sourceId: any;
+      if (args.length === 1 && args[0] && typeof args[0] === "object") {
+        ({ level, message, lineNumber: line, sourceId } = args[0]);
+      } else {
+        [, level, message, line, sourceId] = args;
+      }
+      const isErr =
+        level === "error" ||
+        level === "warning" ||
+        level === 2 ||
+        level === 3;
+      if (isErr) {
+        this.logger.write(
+          `error [renderer:${level}] ${message} (${sourceId}:${line})`,
+        );
+      }
+    });
   }
 
   loadAppPage(port: number) {

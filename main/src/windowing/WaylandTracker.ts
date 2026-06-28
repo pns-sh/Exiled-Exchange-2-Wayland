@@ -58,10 +58,6 @@ function positionOverlay() {
   if (!lastPoeGeo) return;
   var o = findOverlay();
   if (!o || !o.frameGeometry) return;
-  // Pin the overlay above PoE2. Once it sits exactly over the game window,
-  // PoE2 (borderless) would otherwise stack on top and the overlay's content
-  // is invisible even though it is positioned and focused correctly.
-  o.keepAbove = true;
   var g = o.frameGeometry;
   if ((g.x | 0) === lastPoeGeo.x && (g.y | 0) === lastPoeGeo.y &&
       (g.width | 0) === lastPoeGeo.width && (g.height | 0) === lastPoeGeo.height) {
@@ -73,8 +69,23 @@ function positionOverlay() {
   };
 }
 
+// Keep the overlay ABOVE only while the user is in the game context (PoE2 or
+// an EE2 window focused). Otherwise push it below so it never floats over --
+// and block mouse input to -- other apps the user alt-tabs to. A blanket
+// keepAbove makes the overlay hijack every other window.
+function updateOverlayStacking() {
+  var o = findOverlay();
+  if (!o) return;
+  var aw = workspace.activeWindow;
+  var inGame = !!(aw && (isPoeWindow(aw) || isOverlayWindow(aw)));
+  o.keepAbove = inGame;
+  o.keepBelow = !inGame;
+  if (inGame) positionOverlay();
+}
+
 function trackOverlay(w) {
   positionOverlay();
+  updateOverlayStacking();
   // Re-correct whenever the overlay moves (e.g. Electron re-sets its bounds).
   if (w.frameGeometryChanged) {
     w.frameGeometryChanged.connect(function () { positionOverlay(); });
@@ -104,6 +115,7 @@ function trackPoe(w) {
   if (w.activeChanged) {
     w.activeChanged.connect(function () {
       call("Focus", !!w.active);
+      updateOverlayStacking();
     });
   }
   if (w.closed) {
@@ -128,6 +140,12 @@ if (added) {
     if (isPoeWindow(w)) trackPoe(w);
     else if (isOverlayWindow(w)) trackOverlay(w);
   });
+}
+
+// Whenever the active window changes, update overlay stacking so it stays
+// above the game but never floats over unrelated apps (console, browser, ...).
+if (workspace.windowActivated) {
+  workspace.windowActivated.connect(function () { updateOverlayStacking(); });
 }
 
 // Focus tracking is done per-PoE-window via w.activeChanged inside
