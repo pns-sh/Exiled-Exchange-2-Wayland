@@ -13,6 +13,7 @@ import {
 import { debug } from "../debug";
 import { typeInChat, stashSearch } from "./text-box";
 import { WidgetAreaTracker } from "../windowing/WidgetAreaTracker";
+import { isKdeWayland } from "../windowing/WaylandTracker";
 import { HostClipboard } from "./HostClipboard";
 import { OcrWorker } from "../vision/link-main";
 import type { ShortcutAction } from "../../../ipc/types";
@@ -279,7 +280,15 @@ export class Shortcuts {
               focusOverlay: Boolean(action.focusOverlay),
             },
           });
-          if (action.focusOverlay && this.overlay.wasUsedRecently) {
+          if (isKdeWayland()) {
+            // On KDE Wayland the overlay window is only actually visible while
+            // it's active; a click-through overlay doesn't render its panel.
+            // The original gate (focusOverlay && wasUsedRecently) is false when
+            // the price-check is triggered from the game, so the panel stayed
+            // hidden until the user manually toggled the overlay (Shift+Space).
+            // Activate it here so the price-check shows immediately.
+            this.overlay.assertOverlayActive();
+          } else if (action.focusOverlay && this.overlay.wasUsedRecently) {
             this.overlay.assertOverlayActive();
           }
         })
@@ -364,15 +373,26 @@ function pressKeysToCopyItemText(
   pressedModKeys: string[] = [],
   showModsKey: string,
 ) {
-  let keys = mergeTwoHotkeys("Ctrl + C", showModsKey).split(" + ");
+  // PoE2 copies the full item (including mod tiers) with a plain Ctrl+C. Unlike
+  // PoE1 it has no Ctrl+Alt+C "advanced copy" -- merging the show-mods key (Alt)
+  // yields a combo PoE2 doesn't treat as copy, so nothing reaches the clipboard
+  // and the price-check stays empty. Use a plain Ctrl+C.
+  void showModsKey;
+  let keys = ["Ctrl", "C"];
   keys = keys.filter((key) => key !== "C");
-  if (process.platform !== "darwin") {
+  if (process.platform !== "darwin" && !isKdeWayland()) {
     // On non-Mac platforms, don't toggle keys that are already being pressed.
     //
     // For unknown reasons, we need to toggle pressed keys on Mac for advanced
     // mod descriptions to be copied. You can test this by setting the shortcut
     // to "Alt + any letter". They'll work with this line, but not if it's
     // commented out.
+    //
+    // EXCEPTION (KDE Wayland): the hotkey arrives via a KWin global shortcut,
+    // which consumes the physical key combo -- so the held modifier (e.g. Ctrl)
+    // is NOT reliably down when we synthesize the copy. Keep all modifiers so
+    // we emit a complete Ctrl(+Alt)+C ourselves via ydotool; the InputSynth
+    // batch holds them across the C tap and releases them at the batch end.
     keys = keys.filter((key) => !pressedModKeys.includes(key));
   }
 
