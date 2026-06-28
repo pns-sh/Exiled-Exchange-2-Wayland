@@ -41,33 +41,51 @@ function uiohookKey(name: string): number | undefined {
   return (UiohookKey as unknown as Record<string, number>)[name];
 }
 
+// Serializes ydotool invocations. ydotool drives a single uinput device via
+// ydotoold; two ydotool processes running at once interleave their key events
+// on that device. With our batches taking ~600ms (12+ events at --key-delay
+// 30), a copy fired while a previous batch is still draining can have its
+// Ctrl-down land between the prior batch's Ctrl-release and this batch's
+// C-down -- so PoE2 receives a bare "C" (opens the Character panel) and the
+// item never gets copied. Chaining each spawn behind the previous one's exit
+// guarantees clean, non-overlapping sequences.
+let ydotoolChain: Promise<void> = Promise.resolve();
+
 function spawnYdotool(args: string[]) {
-  const binPath = getBinPath("ydotool");
-  debug(`[InputSynth] ${binPath} ${args.join(" ")}`);
-  try {
-    const child = spawn(binPath, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: getBundledEnv(),
-    });
-    let stderr = "";
-    child.stderr?.on("data", (d) => {
-      stderr += d.toString();
-    });
-    child.on("exit", (code) => {
-      if (code !== 0) {
-        console.error(
-          `[InputSynth] ydotool exited ${code}, stderr=${stderr.trim()}`,
-        );
-      }
-    });
-    child.on("error", (err) => {
-      console.error(`[InputSynth] ydotool spawn error: ${err.message}`);
-    });
-  } catch (err) {
-    console.error(
-      `[InputSynth] failed to launch ydotool: ${(err as Error).message}`,
-    );
-  }
+  ydotoolChain = ydotoolChain.then(
+    () =>
+      new Promise<void>((resolve) => {
+        const binPath = getBinPath("ydotool");
+        debug(`[InputSynth] ${binPath} ${args.join(" ")}`);
+        try {
+          const child = spawn(binPath, args, {
+            stdio: ["ignore", "pipe", "pipe"],
+            env: getBundledEnv(),
+          });
+          let stderr = "";
+          child.stderr?.on("data", (d) => {
+            stderr += d.toString();
+          });
+          child.on("exit", (code) => {
+            if (code !== 0) {
+              console.error(
+                `[InputSynth] ydotool exited ${code}, stderr=${stderr.trim()}`,
+              );
+            }
+            resolve();
+          });
+          child.on("error", (err) => {
+            console.error(`[InputSynth] ydotool spawn error: ${err.message}`);
+            resolve();
+          });
+        } catch (err) {
+          console.error(
+            `[InputSynth] failed to launch ydotool: ${(err as Error).message}`,
+          );
+          resolve();
+        }
+      }),
+  );
 }
 
 // Batch all synthesis calls made within a single JS tick into one ydotool

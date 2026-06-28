@@ -32,6 +32,12 @@ import { debug } from "../debug";
 export class InputProxy {
   private window: BrowserWindow;
   private shown = false;
+  // Timestamp (ms) until which key input is ignored. When the overlay opens
+  // from a price-check, the ydotool Ctrl+C copy can still be streaming as we
+  // grab focus, so its tail arrives at this window. Swallow that synthesized
+  // noise for a short window so it isn't forwarded into the overlay or
+  // mistaken for a user keypress (e.g. an Escape that would close the panel).
+  private ignoreInputUntil = 0;
 
   constructor(
     private target: BrowserWindow,
@@ -71,6 +77,13 @@ export class InputProxy {
       // key appears "tapped" from the perspective of the main window's DOM.
 
       if (input.type !== "keyDown") return;
+
+      // Swallow synthesized key noise (the ydotool copy tail) that races the
+      // focus grab right after the panel opens. Without this, a stray Ctrl+C
+      // gets forwarded into the overlay and a stray Escape would close it.
+      if (Date.now() < this.ignoreInputUntil) {
+        return;
+      }
 
       // Escape closes the overlay panel
       if (input.key === "Escape" && !input.control && !input.alt && !input.shift) {
@@ -189,6 +202,9 @@ export class InputProxy {
   show() {
     if (this.shown) return;
     this.shown = true;
+    // Briefly ignore inbound keys so the in-flight copy synth's tail can't
+    // bounce us closed. 250ms comfortably covers a ydotool batch drain.
+    this.ignoreInputUntil = Date.now() + 250;
     debug("[InputProxy] show");
     this.window.showInactive();
     // Small delay before focusing to let KWin process the show

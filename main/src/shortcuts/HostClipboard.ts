@@ -7,6 +7,17 @@ import { getBinPath, getBundledEnv } from "../linux/BundledBins";
 
 const POLL_DELAY = 48;
 const POLL_LIMIT = 1500;
+// KDE Wayland only. PoE2's clipboard write can sit "pending" behind our own
+// __EE2_FORCE_EMPTY_ placeholder (also a Wayland selection, set via wl-copy)
+// for seconds -- the copy reaches the game but never surfaces to wl-paste.
+// Re-writing the placeholder changes selection ownership, which flushes PoE2's
+// pending offer into the readable selection ~tens of ms later. We nudge on a
+// tight cadence: a nudge only runs when we still see our own placeholder (the
+// item hasn't surfaced), and each poll reads before nudging, so a nudge can
+// never clobber a real copy. The item surfaces on the first nudge that finds
+// the copy pending, so a small interval just makes it open sooner.
+const NUDGE_INTERVAL = 80;
+const FORCE_EMPTY_PREFIX = "__EE2_FORCE_EMPTY_";
 
 // Under native KDE Wayland the overlay process is XWayland; PoE2 is native
 // Wayland. Electron's clipboard.readText() reads the X11 CLIPBOARD, but
@@ -87,6 +98,7 @@ export class HostClipboard {
       writeClipboardText(`__EE2_FORCE_EMPTY_${Date.now()}`);
     }
 
+    let lastNudge = 0;
     this.pollPromise = new Promise((resolve, reject) => {
       const poll = () => {
         const textAfter = readClipboardText();
@@ -100,6 +112,17 @@ export class HostClipboard {
         } else {
           this.elapsed += POLL_DELAY;
           if (this.elapsed < POLL_LIMIT) {
+            // Flush a copy stuck behind our placeholder (see NUDGE_INTERVAL).
+            // Only re-write when we still see our own placeholder, so we never
+            // clobber a real item or the user's own clipboard content.
+            if (
+              USE_WL_PASTE &&
+              this.elapsed - lastNudge >= NUDGE_INTERVAL &&
+              textAfter.startsWith(FORCE_EMPTY_PREFIX)
+            ) {
+              lastNudge = this.elapsed;
+              writeClipboardText(`${FORCE_EMPTY_PREFIX}${Date.now()}`);
+            }
             setTimeout(poll, POLL_DELAY);
           } else {
             if (this.shouldRestore) {

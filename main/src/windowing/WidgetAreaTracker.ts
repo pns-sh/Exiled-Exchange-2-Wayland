@@ -2,6 +2,17 @@ import { Rectangle, Point, screen } from "electron";
 import { uIOhook, UiohookMouseEvent } from "uiohook-napi";
 import type { OverlayWindow } from "./OverlayWindow";
 import type { ServerEvents } from "../server";
+import { isKdeWayland } from "./WaylandTracker";
+
+// uIOhook cannot read the pointer position on KDE Wayland (the KWin script
+// feeds cursor coords separately for exactly this reason). With bogus mouse
+// coordinates, the area-tracker thinks the cursor is outside the price-check
+// panel the instant it opens and calls assertGameActive(), closing it before
+// it can take focus -- which is why Ctrl+D/Alt+E "open then vanish" while
+// Shift+Space (which never starts area-tracking) works. Disable the mouse-area
+// open/close tracking here; the panel is opened by the hotkey and closed with
+// Esc / the overlay toggle instead.
+const AREA_TRACKING_UNRELIABLE = isKdeWayland();
 
 export class WidgetAreaTracker {
   private holdKey!: string;
@@ -58,6 +69,9 @@ export class WidgetAreaTracker {
       }
 
       this.removeListeners();
+      // On KDE Wayland the pointer coords are unreliable, so skip area
+      // tracking entirely (see note at top of file).
+      if (AREA_TRACKING_UNRELIABLE) return;
       uIOhook.addListener("mousemove", this.handleMouseMove);
       uIOhook.addListener("mousedown", this.handleMouseDown);
     });

@@ -51,6 +51,14 @@ export class Shortcuts {
   private logKeys = false;
   private areaTracker: WidgetAreaTracker;
   private clipboard: HostClipboard;
+  // KDE Wayland re-entrancy guard for the price-check copy. KWin delivers a
+  // held global hotkey (Ctrl+D) as an auto-repeat stream. The first fire
+  // copies the item and opens the overlay (which grabs keyboard focus via the
+  // InputProxy); a second fire arriving before that settles synthesizes
+  // another Ctrl+C that now lands on the focused InputProxy instead of PoE2 --
+  // diverting the copy and bouncing focus so the panel "opens then vanishes".
+  // While a copy is in flight we drop further copy triggers.
+  private copyItemInFlight = false;
 
   static async create(
     logger: Logger,
@@ -266,14 +274,32 @@ export class Shortcuts {
     } else if (entry.action.type === "copy-item") {
       const { action } = entry;
 
+      // KDE Wayland re-entrancy guards (see copyItemInFlight field comment):
+      //   1. If the overlay already holds keyboard focus, the game can't
+      //      receive a synthesized Ctrl+C -- it would land on our InputProxy
+      //      and bounce focus. This is a stable state check, not a timer.
+      //   2. While a copy is still polling the clipboard, drop overlapping
+      //      triggers (held-key auto-repeat) so we don't fire redundant synths.
+      if (isKdeWayland()) {
+        if (this.overlay.isInteractable || this.copyItemInFlight) return;
+        this.copyItemInFlight = true;
+      }
+      const releaseCopyLock = () => {
+        this.copyItemInFlight = false;
+      };
+
       // On Wayland, screen.getCursorScreenPoint() returns frozen coords.
       // Use the WaylandTracker's cursor position instead.
       const pressPosition =
         this.poeWindow.getCursorPoint() ?? screen.getCursorScreenPoint();
 
+      // Set once the clipboard yields an item, so the auto-retry below stops.
+      let copied = false;
+
       this.clipboard
         .readItemText()
         .then((clipboard) => {
+          copied = true;
           this.areaTracker.removeListeners();
           this.server.sendEventTo("last-active", {
             name: "MAIN->CLIENT::item-text",
@@ -296,14 +322,37 @@ export class Shortcuts {
             this.overlay.assertOverlayActive();
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(releaseCopyLock);
 
-      pressKeysToCopyItemText(
-        entry.keepModKeys
-          ? entry.shortcut.split(" + ").filter((key) => isModKey(key))
-          : undefined,
-        this.gameConfig.showModsKey,
-      );
+      const pressedModKeys = entry.keepModKeys
+        ? entry.shortcut.split(" + ").filter((key) => isModKey(key))
+        : undefined;
+
+      if (isKdeWayland()) {
+        // The synthesized Ctrl+C occasionally doesn't land on PoE2 on the
+        // first try (focus/timing right after a previous overlay close), so
+        // the clipboard stays empty and the panel never opens -- the user
+        // learned to "press Ctrl+D a few times". Do those retries ourselves:
+        // re-synth the copy until the clipboard yields an item (copied) or the
+        // overlay has taken focus, up to a handful of tries. The interval must
+        // exceed one ydotool batch (~600ms, now serialized) so a retry never
+        // queues behind an in-flight batch; a successful copy lands and
+        // resolves well before the first interval elapses, so this only ever
+        // fires again when a copy genuinely missed.
+        const COPY_RETRIES = 3;
+        const COPY_RETRY_MS = 650;
+        const trySynthCopy = (attempt: number) => {
+          if (copied || this.overlay.isInteractable) return;
+          pressKeysToCopyItemText(pressedModKeys, this.gameConfig.showModsKey);
+          if (attempt + 1 < COPY_RETRIES) {
+            setTimeout(() => trySynthCopy(attempt + 1), COPY_RETRY_MS);
+          }
+        };
+        trySynthCopy(0);
+      } else {
+        pressKeysToCopyItemText(pressedModKeys, this.gameConfig.showModsKey);
+      }
     } else if (
       entry.action.type === "ocr-text" &&
       entry.action.target === "heist-gems"

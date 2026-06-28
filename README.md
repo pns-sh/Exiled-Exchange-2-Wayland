@@ -11,6 +11,48 @@ Fork of [Awakened PoE Trade](https://github.com/SnosMe/awakened-poe-trade).
 
 The ONLY official download sites are <https://kvan7.github.io/Exiled-Exchange-2/download> or <https://github.com/Kvan7/Exiled-Exchange-2/releases>, any other locations are not official and may be malicious.
 
+## KDE Wayland fork (this repo)
+
+This fork adds **native KDE Plasma 6 Wayland** support, where the stock build's
+global hotkeys and overlay do not work (uiohook/XGrabKey never sees the keys).
+It is built on top of [`coreydeli/Exiled-Exchange-2-Wayland`](https://github.com/coreydeli/Exiled-Exchange-2-Wayland)
+and merged up to upstream `Kvan7` v0.15.8.
+
+What it does differently on Linux/Wayland:
+
+- **Global hotkeys** are registered through a generated **KWin script over D-Bus**
+  (`registerShortcut`) — the only way `Ctrl`+letter combos reach the app under KDE
+  Wayland.
+- **Input synthesis** (the price-check copy) goes through bundled **ydotool/ydotoold**
+  (uinput); clipboard via bundled **wl-clipboard**.
+- A **KWin script positions/keeps the overlay above PoE2** (Wayland forbids a client
+  positioning its own window) and reactivates PoE2 on close.
+- A focusable **1×1 InputProxy window** grabs keyboard focus on the overlay's behalf
+  (the main overlay must be `focusable:false` to composite above the game).
+
+### Price-check reliability fixes (0.15.8-1)
+
+The price-check panel used to "open then vanish" / need several `Ctrl+D` presses on
+KDE Wayland. Root causes and fixes:
+
+- **Serialize ydotool** — overlapping invocations interleaved on the single uinput
+  device and corrupted `Ctrl+C` into a bare `C` (opened the Character panel, copied
+  nothing).
+- **Clipboard "nudge"** — PoE2's Wayland clipboard copy stayed masked behind our own
+  `wl-copy` placeholder for seconds; re-writing the placeholder mid-poll flushes the
+  pending copy into the readable selection in ~tens of ms.
+- **Copy re-entrancy guard + InputProxy grace window** — a held `Ctrl+D` can no longer
+  synthesize a copy into the focused overlay, and the synth's key tail can't bounce the
+  panel closed.
+
+### Requirements & usage
+
+- PoE2 in **Borderless windowed** (not exclusive fullscreen), **not** under gamescope.
+- Build (`main/`): `rm -rf dist && npm run build && npm run package`; the AppImage lands
+  in `main/dist/`.
+- Usage: hover an item + **Ctrl+D** = price check, **Shift+Space** = overlay toggle,
+  **Esc** = close & refocus the game.
+
 ## Moving from POE1/Awakened PoE Trade
 
 1. Download latest release from [releases](https://github.com/Kvan7/exiled-exchange-2/releases)
