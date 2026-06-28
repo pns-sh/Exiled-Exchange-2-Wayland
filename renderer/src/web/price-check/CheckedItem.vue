@@ -192,7 +192,6 @@ export default defineComponent({
         } else {
           doSearch.value = Boolean(
             item.rarity === ItemRarity.Unique ||
-              item.category === ItemCategory.Map ||
               item.category === ItemCategory.HeistBlueprint ||
               item.category === ItemCategory.SanctumRelic ||
               item.category === ItemCategory.Charm ||

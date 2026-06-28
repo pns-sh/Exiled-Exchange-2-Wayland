@@ -6,7 +6,7 @@ import { BaseType, ITEM_BY_REF } from "@/assets/data";
 import { CATEGORY_TO_TRADE_ID } from "../trade/pathofexile-trade";
 import { PriceCheckWidget } from "@/web/overlay/widgets";
 import { isArmourOrWeaponOrCaster } from "@/parser/Parser";
-import { ARMOUR, WEAPON } from "@/parser/meta";
+import { ARMOUR, GEM, WEAPON } from "@/parser/meta";
 import { maxUsefulItemLevel } from "./common";
 
 export const SPECIAL_SUPPORT_GEM = [
@@ -17,6 +17,7 @@ export const SPECIAL_SUPPORT_GEM = [
 
 const CATEGORIES_WITH_USEFUL_QUALITY = new Set([
   ItemCategory.Flask,
+  ItemCategory.Charm,
   ItemCategory.Tincture,
   ...WEAPON,
   ...ARMOUR,
@@ -57,7 +58,7 @@ export function createFilters(
     },
   };
 
-  if (item.category === ItemCategory.Gem && !tradeTag(item)) {
+  if (item.category && GEM.has(item.category) && !tradeTag(item)) {
     return createGemFilters(item, filters, opts);
   }
   if (item.category === ItemCategory.UncutGem) {
@@ -246,6 +247,11 @@ export function createFilters(
         // Not by default if rare, since most of craft is likely already done (and don't care about it on finished items)
         disabled: item.rarity === ItemRarity.Rare,
       };
+    } else if (item.category === ItemCategory.Charm) {
+      filters.quality = {
+        value: item.quality,
+        disabled: item.quality < 10,
+      };
     }
   }
 
@@ -267,7 +273,9 @@ export function createFilters(
     if (item.augmentSockets.current) {
       filters.augmentSockets = {
         value: item.augmentSockets.current,
-        disabled: item.augmentSockets.current <= item.augmentSockets.normal,
+        disabled:
+          item.augmentSockets.current <= item.augmentSockets.normal &&
+          !item.isCorrupted,
       };
     }
     if (item.augmentSockets.empty > 0 && item.rarity !== ItemRarity.Unique) {

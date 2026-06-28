@@ -152,6 +152,10 @@ export class Shortcuts {
     });
   }
 
+  updateDelay(delay: number) {
+    this.clipboard.updateDelay(delay);
+  }
+
   updateActions(
     actions: ShortcutAction[],
     stashScroll: boolean,

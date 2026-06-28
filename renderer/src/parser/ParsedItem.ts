@@ -54,9 +54,14 @@ export interface ParsedItem {
   mapItemRarity?: number;
   mapRevives?: number;
   mapDropChance?: number;
+  // doesn't exist in 0.5.2
   mapMagicMonsters?: number;
+  // doesn't exist in 0.5.2
   mapRareMonsters?: number;
+  // doesn't exist in 0.5.2
   mapGold?: number;
+  mapMonsterRarity?: number;
+  mapEffectiveness?: number;
   gemLevel?: number;
   areaLevel?: number;
   talismanTier?: number;

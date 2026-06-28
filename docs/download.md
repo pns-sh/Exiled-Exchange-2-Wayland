@@ -32,8 +32,12 @@ warnings on Windows and [macOS](https://support.apple.com/en-us/HT202491#openany
   - ✔ Windowed Fullscreen, Windowed
   - ❌ Fullscreen
 - PoE language
-  - ✔ English
-  - ❌ Russian, Portuguese, Thai, French, German, Spanish, Korean
+  - ✔ English, Russian, Portuguese, French, German, Spanish, Korean, Traditional Chinese, Japanese
+  - ❌ Thai
+
+Translation status for each language:
+
+[![Translation status](https://translate.codeberg.org/widget/exiled-exchange-2/exiled-exchange-2/multi-auto.svg)](https://translate.codeberg.org/engage/exiled-exchange-2/)
 
 No Administrator rights required, but\
 ⚠ **If you run PoE client as Admin, OS security boundaries take effect.

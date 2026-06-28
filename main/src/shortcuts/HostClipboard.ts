@@ -51,6 +51,7 @@ export class HostClipboard {
   private pollPromise?: Promise<string>;
   private elapsed = 0;
   private shouldRestore = false;
+  private initialDelay = POLL_DELAY;
 
   private isRestored = true;
 
@@ -73,7 +74,17 @@ export class HostClipboard {
     let textBefore = readClipboardText();
     if (isPoeItem(textBefore)) {
       textBefore = "";
-      writeClipboardText("");
+      if (process.platform !== "linux") {
+        writeClipboardText("");
+      } else {
+        // workaround KDE's "Prevent empty clipboard" feature (routed through
+        // writeClipboardText so it uses wl-copy on native Wayland)
+        // see https://github.com/SnosMe/awakened-poe-trade/issues/1790#issuecomment-4062830614
+        writeClipboardText(`__EE2_FORCE_EMPTY_${Date.now()}`);
+      }
+    } else if (process.platform === "linux") {
+      // workaround bug in Proton 10+ https://github.com/SnosMe/awakened-poe-trade/issues/1846
+      writeClipboardText(`__EE2_FORCE_EMPTY_${Date.now()}`);
     }
 
     this.pollPromise = new Promise((resolve, reject) => {
@@ -103,7 +114,7 @@ export class HostClipboard {
           }
         }
       };
-      setTimeout(poll, POLL_DELAY);
+      setTimeout(poll, this.initialDelay);
     });
 
     return await this.pollPromise;
@@ -138,55 +149,73 @@ export class HostClipboard {
   readText(): string {
     return readClipboardText();
   }
+
+  updateDelay(delay: number) {
+    this.initialDelay = delay;
+  }
 }
 
 function isPoeItem(text: string) {
-  return LANGUAGE_DETECTOR.find(({ firstLine }) => text.startsWith(firstLine));
+  return LANGUAGE_DETECTOR.find(
+    ({ firstLine, uncutSkillGemLine }) =>
+      text.startsWith(firstLine) || text.startsWith(uncutSkillGemLine),
+  );
 }
 
 const LANGUAGE_DETECTOR = [
   {
     lang: "en",
     firstLine: "Item Class: ",
+    uncutSkillGemLine: "Rarity: ",
   },
   {
     lang: "ru",
-    firstLine: "\u041a\u043b\u0430\u0441\u0441 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430: ",
+    firstLine: "Класс предмета: ",
+    uncutSkillGemLine: "Редкость: ",
   },
   {
     lang: "fr",
     firstLine: "Classe d'objet: ",
+    uncutSkillGemLine: "Rareté: ",
   },
   {
     lang: "de",
     firstLine: "Gegenstandsklasse: ",
+    uncutSkillGemLine: "Seltenheit: ",
   },
   {
     lang: "pt",
     firstLine: "Classe do Item: ",
+    uncutSkillGemLine: "Raridade: ",
   },
   {
     lang: "es",
     firstLine: "Clase de objeto: ",
+    uncutSkillGemLine: "Rareza: ",
   },
   {
     lang: "th",
-    firstLine: "\u0e0a\u0e19\u0e34\u0e14\u0e44\u0e2d\u0e40\u0e17\u0e21: ",
+    firstLine: "ชนิดไอเทม: ",
+    uncutSkillGemLine: "Rarity: ",
   },
   {
     lang: "ko",
-    firstLine: "\uc544\uc774\ud15c \uc885\ub958: ",
+    firstLine: "아이템 종류: ",
+    uncutSkillGemLine: "아이템 희귀도: ",
   },
   {
     lang: "cmn-Hant",
-    firstLine: "\u7269\u54c1\u7a2e\u985e: ",
+    firstLine: "物品種類: ",
+    uncutSkillGemLine: "稀有度: ",
   },
   {
     lang: "cmn-Hans",
-    firstLine: "\u7269\u54c1\u7c7b\u522b: ",
+    firstLine: "物品类别: ",
+    uncutSkillGemLine: "Rarity: ",
   },
   {
     lang: "ja",
-    firstLine: "\u30a2\u30a4\u30c6\u30e0\u30af\u30e9\u30b9: ",
+    firstLine: "アイテムクラス: ",
+    uncutSkillGemLine: "レアリティ: ",
   },
 ];

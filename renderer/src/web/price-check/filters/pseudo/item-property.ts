@@ -487,6 +487,7 @@ function mapProps(ctx: FiltersCreationContext) {
   }
 
   if (item.mapMagicMonsters) {
+    // doesn't exist in 0.5.2
     const magicMonsters = calcPropBounds(
       item.mapMagicMonsters,
       { flat: [], incr: [] },
@@ -507,6 +508,7 @@ function mapProps(ctx: FiltersCreationContext) {
   }
 
   if (item.mapRareMonsters) {
+    // doesn't exist in 0.5.2
     const rareMonsters = calcPropBounds(
       item.mapRareMonsters,
       { flat: [], incr: [] },
@@ -555,7 +557,7 @@ function mapProps(ctx: FiltersCreationContext) {
     ctx.filters.push(
       propToFilter(
         {
-          ref: "Item Rarity: #%",
+          ref: "Map Item Rarity: #%",
           tradeId: "item.map_item_rarity",
           roll: itemRarity.roll,
           sources: itemRarity.sources,
@@ -567,6 +569,7 @@ function mapProps(ctx: FiltersCreationContext) {
   }
 
   if (item.mapGold) {
+    // doesn't exist in 0.5.2
     const gold = calcPropBounds(item.mapGold, { flat: [], incr: [] }, item);
     ctx.filters.push(
       propToFilter(
@@ -575,6 +578,48 @@ function mapProps(ctx: FiltersCreationContext) {
           tradeId: "item.map_gold",
           roll: gold.roll,
           sources: gold.sources,
+          disabled: true,
+        },
+        ctx,
+      ),
+    );
+  }
+
+  if (item.mapMonsterRarity) {
+    const itemRarity = calcPropBounds(
+      item.mapMonsterRarity,
+      { flat: [], incr: [] },
+      item,
+    );
+    ctx.filters.push(
+      propToFilter(
+        {
+          ref: "Monster Rarity: #%",
+          // yes rare monsters replaced trade id
+          tradeId: "item.map_rare_monsters",
+          roll: itemRarity.roll,
+          sources: itemRarity.sources,
+          disabled: true,
+        },
+        ctx,
+      ),
+    );
+  }
+
+  if (item.mapEffectiveness) {
+    const itemRarity = calcPropBounds(
+      item.mapEffectiveness,
+      { flat: [], incr: [] },
+      item,
+    );
+    ctx.filters.push(
+      propToFilter(
+        {
+          ref: "Monster Effectiveness: #%",
+          // yes magic monsters
+          tradeId: "item.map_magic_monsters",
+          roll: itemRarity.roll,
+          sources: itemRarity.sources,
           disabled: true,
         },
         ctx,
@@ -618,7 +663,7 @@ function isPdpsImportant(item: ParsedItem) {
   }
 }
 
-function propToFilter(
+export function propToFilter(
   opts: {
     ref: string;
     tradeId: InternalTradeId;

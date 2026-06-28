@@ -64,6 +64,7 @@ export enum ItemCategory {
   MapFragment = "MapFragment",
   Talisman = "Talisman",
   Augment = "Augment",
+  Wombgift = "BrequelFruit",
 }
 
 export const WEAPON_ONE_HANDED_MELEE = new Set([
@@ -121,6 +122,26 @@ export const ACCESSORY = new Set([
   ItemCategory.Ring,
   ItemCategory.Trinket,
   // ItemCategory.Quiver
+]);
+
+export const GRANTS_REAL_SKILL = new Set([
+  ItemCategory.Staff,
+  ItemCategory.Wand,
+  ItemCategory.Sceptre,
+]);
+
+export const GRANTS_SKILL = new Set([
+  ...GRANTS_REAL_SKILL,
+  ItemCategory.Spear,
+  ItemCategory.Shield,
+  ItemCategory.Buckler,
+]);
+
+export const GEM = new Set([
+  ItemCategory.Gem,
+  ItemCategory.MetaGem,
+  ItemCategory.SupportGem,
+  // ItemCategory.UncutGem,
 ]);
 
 export enum ItemEditorType {
