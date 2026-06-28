@@ -91,6 +91,7 @@ function scheduleFlush() {
     // Convert to ydotool key arguments: each event is "<evdev_code>:<state>"
     // where state is 1 for down and 0 for up.
     const args = ["key", "--key-delay", "30"];
+    let pushed = 0;
     for (const ev of events) {
       const code = NAME_TO_EVDEV[ev.name];
       if (code === undefined) {
@@ -99,9 +100,21 @@ function scheduleFlush() {
       }
       const state = ev.state === "down" ? 1 : 0;
       args.push(`${code}:${state}`);
+      pushed++;
     }
 
-    if (args.length > 3) {
+    if (pushed > 0) {
+      // SAFETY: never let a batch finish with a modifier still held on our
+      // virtual uinput device. A stuck Ctrl/Alt/Meta latches at the compositor
+      // level, makes every keypress a modifier-combo, and SURVIVES killing
+      // this process (the user had to reboot). Always release every modifier
+      // at the end of each batch. These actions only ever *tap* keys, so
+      // nothing should legitimately hold a modifier across batches.
+      // evdev: 29 LCtrl, 97 RCtrl, 42 LShift, 54 RShift, 56 LAlt, 100 RAlt,
+      //        125 LMeta, 126 RMeta.
+      for (const mod of [29, 97, 42, 54, 56, 100, 125, 126]) {
+        args.push(`${mod}:0`);
+      }
       spawnYdotool(args);
     }
   });

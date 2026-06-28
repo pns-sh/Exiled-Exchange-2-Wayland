@@ -106,6 +106,7 @@ export class Shortcuts {
     });
 
     if (USE_COMPOSITOR_HOTKEYS) {
+      const lastHotkeyAt = new Map<string, number>();
       this.poeWindow.onHotkey((shortcut) => {
         // KWin emits the shortcut in Qt format ("Ctrl+D"); our action map is
         // keyed on the app's internal format ("Ctrl + D").
@@ -114,6 +115,14 @@ export class Shortcuts {
           `[Shortcuts] kwin-hotkey shortcut="${shortcut}" internal="${internal}" isActive=${this.poeWindow.isActive} hit=${this.actionByShortcut.has(internal)}`,
         );
         if (!this.poeWindow.isActive) return;
+        // SAFETY/debounce: KWin can deliver a held global shortcut as a rapid
+        // repeat stream. Every fire synthesizes modifier keys via ydotool;
+        // unthrottled, overlapping batches previously latched a stuck modifier
+        // that locked the whole keyboard. Ignore repeats of the same shortcut
+        // within 350ms so a held combo fires at most once.
+        const now = Date.now();
+        if (now - (lastHotkeyAt.get(internal) ?? 0) < 350) return;
+        lastHotkeyAt.set(internal, now);
         const entry = this.actionByShortcut.get(internal);
         if (!entry || entry.action.type === "test-only") return;
         this.runAction(entry);
