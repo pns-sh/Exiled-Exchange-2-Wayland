@@ -236,6 +236,18 @@ export class Shortcuts {
     for (const entry of this.actions) {
       this.actionByShortcut.set(entry.shortcut, entry);
     }
+
+    // Apply the new shortcut list to the compositor immediately. Without this,
+    // a hotkey changed in Settings only updated the in-memory action map; the
+    // KWin registration was refreshed solely on a focus-change register(),
+    // which on Wayland replays the stale paused list and never picks up the new
+    // binding ("changed it but nothing opens"). setShortcuts() handles both
+    // states correctly: in-game it reloads the KWin script now; while the
+    // overlay is open (shortcuts paused) it stashes into the paused list so
+    // resumeShortcuts() applies the new binding on close.
+    if (USE_COMPOSITOR_HOTKEYS) {
+      this.register();
+    }
   }
 
   private runAction(entry: ShortcutAction) {

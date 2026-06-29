@@ -45,6 +45,14 @@ KDE Wayland. Root causes and fixes:
   synthesize a copy into the focused overlay, and the synth's key tail can't bounce the
   panel closed.
 
+### Hotkey rebinding & icon (0.15.8-2)
+
+- **Rebinding hotkeys in Settings now works.** Changing a hotkey is applied to the
+  compositor immediately, and stale KDE `KGlobalAccel` registrations are purged
+  correctly — previously a renamed hotkey left the old key glued to a different action
+  (e.g. `Shift+Space` typed `/hideout`, `Ctrl+D` triggered the price check).
+- **App icon** is installed into the icon theme so the menu entry shows it.
+
 ### Quick install (Arch / CachyOS + KDE Plasma)
 
 ```sh

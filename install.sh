@@ -92,6 +92,18 @@ fi
 EOF
 chmod +x "$WRAPPER"
 
+# --------------------------------------------------------------- icon
+note "Installing app icon"
+ICON_NAME="exiled-exchange-2"
+ICON_BASE="https://raw.githubusercontent.com/$REPO/master/main/build/icons"
+for s in 16 24 32 48 64 128 256 512; do
+  dest="$HOME/.local/share/icons/hicolor/${s}x${s}/apps"
+  mkdir -p "$dest"
+  curl -fsSL -o "$dest/$ICON_NAME.png" "$ICON_BASE/${s}x${s}.png" \
+    || warn "couldn't fetch ${s}x${s} icon"
+done
+gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+
 # --------------------------------------------------------------- menu entry
 note "Creating menu entry"
 mkdir -p "$(dirname "$DESKTOP")"
@@ -101,10 +113,12 @@ Type=Application
 Name=Exiled Exchange 2 (Wayland)
 Comment=PoE2 price-check overlay for KDE Plasma Wayland
 Exec=$WRAPPER
+Icon=$ICON_NAME
 Terminal=false
 Categories=Game;Utility;
 EOF
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+kbuildsycoca6 >/dev/null 2>&1 || true
 
 # --------------------------------------------------------------- done
 case ":$PATH:" in

@@ -252,6 +252,11 @@ export class WaylandTracker extends EventEmitter {
   // overlapping load+unload cycles race in KWin and corrupt the global
   // shortcut registration (Shift+Space stops firing after one open/close).
   private _loadChain: Promise<void> = Promise.resolve();
+  // The last non-empty shortcut set actually applied, and whether we've purged
+  // stale KGlobalAccel registrations once this process. Used to clear our
+  // global-shortcut names only when the set changes (see _doLoadKwinScript).
+  private _lastAppliedShortcuts: string[] | null = null;
+  private _didInitialClear = false;
 
   constructor(private logger: Logger) {
     super();
@@ -383,8 +388,21 @@ export class WaylandTracker extends EventEmitter {
     // Unload any previously loaded script
     await this._unloadKwinScript();
 
-    // Clear prior shortcut registrations from KGlobalAccel
-    await this._clearPriorShortcuts();
+    // Clear prior KGlobalAccel registrations when the shortcut set actually
+    // changes (a hotkey was edited) or on the first load of this process (to
+    // purge leftovers from a crashed prior session). KGlobalAccel persists the
+    // key per action NAME and ignores the new default a reload assigns, so
+    // reusing exiled-exchange-2-hk-N for a different shortcut leaves the OLD
+    // key glued to it -- the cause of "Shift+Space typed /hideout" /
+    // "Ctrl+D triggered price-check". We skip this on the frequent pause/resume
+    // reloads (same set) to avoid needless D-Bus churn.
+    const setChanged =
+      JSON.stringify(shortcuts) !== JSON.stringify(this._lastAppliedShortcuts);
+    if (!this._didInitialClear || (shortcuts.length > 0 && setChanged)) {
+      await this._clearPriorShortcuts();
+      this._didInitialClear = true;
+      if (shortcuts.length > 0) this._lastAppliedShortcuts = shortcuts.slice();
+    }
 
     // Write the script
     const script = buildKwinScript(shortcuts, activatePoe, activateOverlay);
@@ -492,34 +510,25 @@ export class WaylandTracker extends EventEmitter {
       );
       const kga = kgaObj.getInterface("org.kde.KGlobalAccel");
 
-      // Get all action names and unregister exiled-exchange-2-* ones
-      // The interface uses component + action naming; we need to clean up
-      // stale registrations that survive across process restarts.
-      try {
-        const actions: string[][] = await kga.allActionsForComponent("kwin");
-        for (const action of actions) {
-          const actionName = action[0];
-          if (
-            actionName &&
-            actionName.startsWith("exiled-exchange-2-")
-          ) {
-            try {
-              await kga.unregister("kwin", actionName);
-              debug(
-                "[WaylandTracker] unregistered stale shortcut:",
-                actionName,
-              );
-            } catch {
-              // ignore individual unregister failures
-            }
-          }
-        }
-      } catch {
-        // allActionsForComponent may not be available on all KDE versions;
-        // the script reload still works, the stale shortcuts just linger
-        // until next login.
-        debug("[WaylandTracker] could not enumerate KGlobalAccel actions");
+      // Unregister our deterministic action names (exiled-exchange-2-hk-0..N).
+      // KGlobalAccel keys are persisted per action NAME and survive across
+      // reloads/restarts; if a name is later reused for a different shortcut,
+      // the stale key stays bound to it (see _doLoadKwinScript for the symptom).
+      // Removing the names makes the next registration assign keys cleanly.
+      // We unregister a fixed, generous range rather than enumerating, because
+      // allActionsForComponent() takes an actionId list (not a component name)
+      // and threw on this KDE version; unregister(component, name) is reliable.
+      const CLEAR_RANGE = 48;
+      const unregs: Array<Promise<unknown>> = [];
+      for (let i = 0; i < CLEAR_RANGE; i++) {
+        unregs.push(
+          Promise.resolve(
+            kga.unregister("kwin", `exiled-exchange-2-hk-${i}`),
+          ).catch(() => {}),
+        );
       }
+      await Promise.all(unregs);
+      debug("[WaylandTracker] cleared stale KGlobalAccel shortcut names");
     } catch (err) {
       debug(
         "[WaylandTracker] clearPriorShortcuts error (non-fatal):",
