@@ -45,11 +45,23 @@ KDE Wayland. Root causes and fixes:
   synthesize a copy into the focused overlay, and the synth's key tail can't bounce the
   panel closed.
 
+### Quick install (Arch / CachyOS + KDE Plasma)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/pns-sh/Exiled-Exchange-2-Wayland/master/install.sh | bash
+```
+
+The installer downloads the latest release AppImage, installs `fuse2`, sets up
+`/dev/uinput` access (udev rule + `input` group, needed for the price-check key
+synthesis), and creates an `ee2-wayland` launcher + app-menu entry that always
+passes `--no-updates`. Re-run it any time to update. A **reboot** is required
+after the first run if it had to add you to the `input` group.
+
 ### Requirements & usage
 
 - PoE2 in **Borderless windowed** (not exclusive fullscreen), **not** under gamescope.
-- Build (`main/`): `rm -rf dist && npm run build && npm run package`; the AppImage lands
-  in `main/dist/`.
+- Build from source (`main/`): `rm -rf dist && npm run build && npm run package`; the
+  AppImage lands in `main/dist/`.
 - Usage: hover an item + **Ctrl+D** = price check, **Shift+Space** = overlay toggle,
   **Esc** = close & refocus the game.
 
